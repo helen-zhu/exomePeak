@@ -8,6 +8,8 @@ exomepeak <- function(
   TREATED_INPUT_BAM=character(0),
   OUTPUT_DIR=NA,
   EXPERIMENT_NAME="exomePeak_output",
+  PAIRED = FALSE,
+  STRANDED = "unstranded",
   WINDOW_WIDTH=200,
   SLIDING_STEP=30,
   FRAGMENT_LENGTH=100,
@@ -41,6 +43,8 @@ exomepeak <- function(
   UCSC_TABLE_NAME = UCSC_TABLE_NAME
   PARAMETERS$TREATED_IP_BAM=TREATED_IP_BAM
   PARAMETERS$TREATED_INPUT_BAM=TREATED_INPUT_BAM
+  PARAMETERS$PAIRED = PAIRED
+  PARAMETERS$STRANDED = STRANDED
   PARAMETERS$FRAGMENT_LENGTH=FRAGMENT_LENGTH
   PARAMETERS$READ_LENGTH=READ_LENGTH
   PARAMETERS$WINDOW_WIDTH=WINDOW_WIDTH
@@ -74,6 +78,12 @@ exomepeak <- function(
   if (is.na(PARAMETERS$GENOME) & is.na(PARAMETERS$GENE_ANNO_GTF) & is.na(PARAMETERS$TXDB)) { 
 		stop("must specify the genome assembly or provide a gtf file/TxDb object for exomePeak to work!", 
 		call. = TRUE, domain = NULL)}
+  
+  # check stranded vs. unstranded
+  if(!PARAMETERS$STRANDED %in% c("unstranded", "forward", "reverse")){
+    stop("Invalid selection of library preparation. Please choose one of unstranded, forward or reverse.",
+         call. = TRUE, domain = NULL)
+  }
 
   # dependent variables
   if (is.na(PARAMETERS$READ_LENGTH)) {PARAMETERS$READ_LENGTH=.get.bam.read.length(PARAMETERS$IP_BAM[1])}
@@ -82,7 +92,7 @@ exomepeak <- function(
   if (is.na(PARAMETERS$DIFF_PEAK_CUTOFF_PVALUE)) {PARAMETERS$DIFF_PEAK_CUTOFF_TYPE="FDR"} else  {PARAMETERS$DIFF_PEAK_CUTOFF_TYPE="PVALUE"} 
   if (is.na(PARAMETERS$OUTPUT_DIR)) {PARAMETERS$OUTPUT_DIR=getwd()}
   
-  # algrithm ##################################################
+  # algorithm ##################################################
   
   # read gene annotation
   ANNOTATION = .read.gtf(PARAMETERS)
