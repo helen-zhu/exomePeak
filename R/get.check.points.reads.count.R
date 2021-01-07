@@ -28,6 +28,8 @@
     ID = which(strand == anno$strand)
   } else if (PARAMETERS$STRANDED == "reverse"){
     ID = which(strand != anno$strand & strand != "*")
+  } else {
+    ID = 1:length(strand)
   }
   pos = pos[ID]
   strand = strand[ID]

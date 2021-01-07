@@ -22,3 +22,4 @@ git_branch: RELEASE_3_8
 git_last_commit: 014e65f
 git_last_commit_date: 2018-10-30
 Date/Publication: 2018-10-30
+RoxygenNote: 7.1.1
