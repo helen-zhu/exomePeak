@@ -12,7 +12,7 @@
   # prepare bam parameters
   which <- IRangesList(chr_unclear=IRanges(anno$left, anno$right))
   names(which)=anno$chr
-  what = c("strand", "pos", "mapq", "qwidth", "isize")
+  what = c("strand", "pos", "mapq", "qwidth") # , "isize")
   param <- ScanBamParam(which=which, what=what, flag = flag)
   
   # read bam file
@@ -21,7 +21,7 @@
   strand=ba[[1]]$strand
   mapq=ba[[1]]$mapq
   qwidth = ba[[1]]$qwidth
-  isize = ba[[1]]$isize
+  # isize = ba[[1]]$isize
   
   # Filtering by Strandedness
   if(PARAMETERS$STRANDED == "forward"){
@@ -35,7 +35,7 @@
   strand = strand[ID]
   mapq = mapq[ID]
   qwidth = qwidth[ID]
-  isize = isize[ID]
+  # isize = isize[ID]
   
   # Filtering by mapq
   mapq[which(is.na(mapq))]=255
@@ -43,14 +43,14 @@
   pos=pos[ID]
   strand=strand[ID]
   qwidth = qwidth[ID]
-  isize = isize[ID]
+  # isize = isize[ID]
   
   # Filtering negative pos
   ID=which(pos>0)
   pos=pos[ID]
   strand=strand[ID]
   qwidth = qwidth[ID]
-  isize = isize[ID]
+  # isize = isize[ID]
   
   # convert pos into rna
   rna_pos=anno$DNA2RNA[pos]
@@ -58,7 +58,7 @@
   rna_pos=rna_pos[on_rna_id]
   strand=strand[on_rna_id]
   qwidth = qwidth[on_rna_id]
-  isize = isize[on_rna_id]
+  # isize = isize[on_rna_id]
   
   if(!PARAMETERS$PAIRED){
     
@@ -81,12 +81,17 @@
     neg_pos=rna_pos[neg_ID]
     qwidth_pos=qwidth[pos_ID]
     qwidth_neg=qwidth[neg_ID]
-    isize_pos=isize[pos_ID]
-    isize_neg=isize[neg_ID]
+    # isize_pos=isize[pos_ID]
+    # isize_neg=isize[neg_ID]
     
     # shift
-    pos_pos=pos_pos+qwidth_pos+round(abs(isize_pos)/2);
-    neg_pos=neg_pos-round(abs(isize_neg)/2)
+    # I really liked the idea of using isize, ut if this is the same as TLEN, in 
+    # sam file specifications, this is very confusing. 
+    # Also, this doesn't work if we convert from DNA2RNA first
+    # pos_pos=pos_pos+qwidth_pos+round(abs(isize_pos)/2);
+    # neg_pos=neg_pos-round(abs(isize_neg)/2)
+    pos_pos=pos_pos+qwidth_pos+round(abs(PARAMETERS$FRAGMENT_LENGTH)/2);
+    neg_pos=neg_pos-round(abs(PARAMETERS$FRAGMENT_LENGTH)/2)
     
   }
 
