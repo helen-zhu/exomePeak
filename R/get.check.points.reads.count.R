@@ -11,7 +11,7 @@
 .get.check.points.reads.count<- function(ibam,anno,bam,check_points,PARAMETERS){
 
   # GENE
-  # print(paste0(anno$gene, "\n"))
+  print(anno$gene)
 
   # RNA2DNA
   RNA2DNA = anno$left:anno$right
@@ -25,7 +25,7 @@
   start(.which) = ifelse(start(.which) < 0, 1, start(.which))
   start(.which) = RNA2DNA[start(.which)]
   .which = S4Vectors::split(.which, 1:length(.which))
-  
+
   # Removing Introns
   if(length(which(anno$DNA2RNA == 0)) > 0){
     introns = GenomicRanges::GRanges(seqnames = anno$chr, IRanges::IRanges(which(anno$DNA2RNA == 0)+anno$left), strand = anno$strand)
