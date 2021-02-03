@@ -11,7 +11,7 @@
 .get.check.points.reads.count<- function(ibam,anno,bam,check_points,PARAMETERS){
 
   # GENE
-  print(anno$gene, "\n")
+  print(paste0(anno$gene, "\n"))
 
   # RNA2DNA
   RNA2DNA = anno$left:anno$right
