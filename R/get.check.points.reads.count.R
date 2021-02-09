@@ -1,126 +1,119 @@
 
-
-# Write a new get.check.points.reads.count
-# Convert checkpoints back to DNA coordinates (with splits on the bins that overlap both)
-# Count reads using rsamtools
-# - unique fragments (by read name)
-# - correct strand (first mate on the opposite strand, second mate on reverse strand)
-# - mapping quality/unpaired reads/multimapped reads
-
 # get check point reads count
 .get.check.points.reads.count<- function(ibam,anno,bam,check_points,PARAMETERS){
-
-  # GENE
-  print(anno$gene)
-
-  # RNA2DNA
-  RNA2DNA = anno$left:anno$right
-  RNA2DNA = RNA2DNA[anno$DNA2RNA > 0]
-
-  # Identifying GRanges
-  .which = GenomicRanges::GRanges(seqnames = anno$chr, IRanges::IRanges(check_points, check_points), strand = anno$strand)
-  .which = GenomicRanges::resize(.which, width = PARAMETERS$WINDOW_WIDTH, fix = "center")
-  end(.which) = ifelse(end(.which) > anno$exome_length, anno$exome_length, end(.which))
-  end(.which) = RNA2DNA[end(.which)]
-  start(.which) = ifelse(start(.which) < 0, 1, start(.which))
-  start(.which) = RNA2DNA[start(.which)]
-  .which = S4Vectors::split(.which, 1:length(.which))
-
-  # Removing Introns
-  if(length(which(anno$DNA2RNA == 0)) > 0){
-    introns = GenomicRanges::GRanges(seqnames = anno$chr, IRanges::IRanges(which(anno$DNA2RNA == 0)+anno$left), strand = anno$strand)
-    split.vec = sort(rep(1:length(.which), length(introns)))
-    introns.rep = rep(introns, length(.which))
-    introns.rep = S4Vectors::split(introns.rep, split.vec)
-    .which = GenomicRanges::setdiff(.which, introns.rep)
-  }
-  .which = unlist(.which)
-
-  # Determining which strand to use
-  ID.strand = structure(c("+", "-"), names = c("-", "+"))
-  if(PARAMETERS$STRANDED == "forward"){
-    ID.strand.m1 = anno$strand
-    ID.strand.m2 = ID.strand[anno$strand]
-  } else if (PARAMETERS$STRANDED == "reverse"){
-    ID.strand.m1 = ID.strand[anno$strand]
-    ID.strand.m2 = anno$strand
-  } else{
-    ID.strand.m1 = ID.strand.m2 = ID.strand
-  }
-
-  # Importing bam file
+  
+  # Determining scanBam Parameters
   if(PARAMETERS$PAIRED){
-
-    # Flags
-    flag.m1 = scanBamFlag(isProperPair = T, isFirstMateRead = T)
-    flag.m2 = scanBamFlag(isProperPair = T, isSecondMateRead = T)
-
-    # What
-    what = c("qname", "strand", "pos", "mapq")
-
-    # Importing Bams
-    param.m1 = ScanBamParam(which=.which, what=what, flag = flag.m1)
-    bam.m1 <- scanBam(bam[ibam], param=param.m1)
-
-    param.m2 = ScanBamParam(which=.which, what=what, flag = flag.m2)
-    bam.m2 <- scanBam(bam[ibam], param=param.m2)
-
-    bin.indices = names(.which)
-    reads.names = list()
-
-    # Counting Unique Read IDs
-    for(i in 1:length(.which)){
-
-      # First mates
-      qname.m1 = bam.m1[[i]]$qname
-      strand.m1 = bam.m1[[i]]$strand
-      mapq.m1 = bam.m1[[i]]$mapq
-      qname.m1 = qname.m1[strand.m1 %in% ID.strand.m1 & mapq.m1 >= 255]
-
-      # Second mates
-      qname.m2 = bam.m2[[i]]$qname
-      strand.m2 = bam.m2[[i]]$strand
-      mapq.m2 = bam.m2[[i]]$mapq
-      qname.m2 = qname.m2[strand.m2 %in% ID.strand.m2 & mapq.m2 >= 255]
-
-      reads.names[[bin.indices[i]]] = unique(c(reads.names[[bin.indices[i]]], qname.m1, qname.m2))
-    }
-
-
+    flag = scanBamFlag(isProperPair = T, isFirstMateRead = T)
   } else { # PARAMETERS$PAIRED = FALSE
-
-    # Flag
     flag = scanBamFlag()
-
-    # What
-    what = c("qname", "strand", "pos", "mapq")
-
-    # Importing Bams
-    param = ScanBamParam(which=.which, what=what, flag = flag)
-    bam.m1 <- scanBam(bam[ibam], param=param)
-
-    bin.indices = names(.which)
-    reads.names = list()
-
-    # Counting Unique Read IDs
-    for(i in 1:length(.which)){
-
-      # First mates
-      qname.m1 = bam.m1[[i]]$qname
-      strand.m1 = bam.m1[[i]]$strand
-      mapq.m1 = bam.m1[[i]]$mapq
-      qname.m1 = qname.m1[strand.m1 %in% ID.strand.m1 & mapq.m1 >= 255]
-
-      reads.names[[bin.indices[i]]] = unique(c(reads.names[[bin.indices[i]]], qname.m1))
-    }
-
   }
-
-  check_points_count = unlist(lapply(reads.names, length))
-  names(check_points_count) = check_points
-
-  if (PARAMETERS$REMOVE_LOCAL_TAG_ANOMALITIES==TRUE) {check_points_count=.remove.local.anomalities(check_points_count)}
-
+  
+  # prepare bam parameters
+  which <- IRangesList(chr_unclear=IRanges(anno$left, anno$right))
+  names(which)=anno$chr
+  what = c("strand", "pos", "mapq", "qwidth") # , "isize")
+  param <- ScanBamParam(which=which, what=what, flag = flag)
+  
+  # read bam file
+  ba <- scanBam(bam[ibam], param=param)
+  pos=ba[[1]]$pos-anno$left+1
+  strand=ba[[1]]$strand
+  mapq=ba[[1]]$mapq
+  qwidth = ba[[1]]$qwidth
+  # isize = ba[[1]]$isize
+  
+  # Filtering by Strandedness
+  if(PARAMETERS$STRANDED == "forward"){
+    ID = which(strand == anno$strand)
+  } else if (PARAMETERS$STRANDED == "reverse"){
+    ID = which(strand != anno$strand & strand != "*")
+  } else {
+    ID = 1:length(strand)
+  }
+  pos = pos[ID]
+  strand = strand[ID]
+  mapq = mapq[ID]
+  qwidth = qwidth[ID]
+  # isize = isize[ID]
+  
+  # Filtering by mapq
+  mapq[which(is.na(mapq))]=255
+  ID=which(mapq>=PARAMETERS$MINIMAL_MAPQ)
+  pos=pos[ID]
+  strand=strand[ID]
+  qwidth = qwidth[ID]
+  # isize = isize[ID]
+  
+  # Filtering negative pos
+  ID=which(pos>0)
+  pos=pos[ID]
+  strand=strand[ID]
+  qwidth = qwidth[ID]
+  # isize = isize[ID]
+  
+  # convert pos into rna
+  rna_pos=anno$DNA2RNA[pos]
+  on_rna_id=which( ((rna_pos>0) + !is.na(rna_pos)) ==2)
+  rna_pos=rna_pos[on_rna_id]
+  strand=strand[on_rna_id]
+  qwidth = qwidth[on_rna_id]
+  # isize = isize[on_rna_id]
+  
+  if(!PARAMETERS$PAIRED){
+    
+    # divide into strand
+    pos_ID=which(strand=="+")
+    neg_ID=which(strand=="-")
+    pos_pos=rna_pos[pos_ID]
+    neg_pos=rna_pos[neg_ID]
+    
+    # shift
+    pos_pos=pos_pos+round(PARAMETERS$FRAGMENT_LENGTH/2);
+    neg_pos=neg_pos+PARAMETERS$READ_LENGTH-round(PARAMETERS$FRAGMENT_LENGTH/2)
+    
+  } else if (PARAMETERS$PAIRED){
+    
+    # divide into strand
+    pos_ID=which(strand=="+")
+    neg_ID=which(strand=="-")
+    pos_pos=rna_pos[pos_ID]
+    neg_pos=rna_pos[neg_ID]
+    qwidth_pos=qwidth[pos_ID]
+    qwidth_neg=qwidth[neg_ID]
+    # isize_pos=isize[pos_ID]
+    # isize_neg=isize[neg_ID]
+    
+    # shift
+    # I really liked the idea of using isize, ut if this is the same as TLEN, in 
+    # sam file specifications, this is very confusing. 
+    # Also, this doesn't work if we convert from DNA2RNA first
+    # pos_pos=pos_pos+qwidth_pos+round(abs(isize_pos)/2);
+    # neg_pos=neg_pos-round(abs(isize_neg)/2)
+    pos_pos=pos_pos+qwidth_pos+round(abs(PARAMETERS$FRAGMENT_LENGTH)/2);
+    neg_pos=neg_pos-round(abs(PARAMETERS$FRAGMENT_LENGTH)/2)
+    
+  }
+  
+  # merge the two
+  pos=c(pos_pos,neg_pos)
+  pos=pos[pos > 0]
+  pos=pos[pos < anno$exome_length]
+  
+  # get direct count
+  check_points_count=check_points
+  pos_table=table(pos)
+  
+  # smooth
+  if (PARAMETERS$REMOVE_LOCAL_TAG_ANOMALITIES==TRUE) {pos_table=.remove.local.anomalities(pos_table)}
+  
+  # get count
+  pos_mapped = as.numeric(names(pos_table))
+  for (i in 1:length(check_points)) { 
+    ID=which(abs(check_points[i]-pos_mapped)*2 < PARAMETERS$WINDOW_WIDTH)
+    check_points_count[i]=sum(pos_table[ID])
+  }
+  
   # return result
   return(check_points_count)
 }
